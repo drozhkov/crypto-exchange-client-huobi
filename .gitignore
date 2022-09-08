@@ -33,3 +33,6 @@
 /.vs
 /out/
 /CMakeSettings.json
+
+#
+/src/crypto-exchange-client-huobi-demo/api-secret.hpp

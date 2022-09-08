@@ -27,6 +27,12 @@ SOFTWARE.
 #define __CRYPTO_EXCHANGE_CLIENT_HUOBI__WS_MESSAGE__H
 
 
+#include <sstream>
+#include <iomanip>
+
+// not ctime as we need gmtime_s
+#include <time.h>
+
 #include "boost/json.hpp"
 
 #include "crypto-exchange-client-core/core.hpp"
@@ -46,6 +52,9 @@ namespace as::cryptox::huobi {
 
 		static const ::as::cryptox::t_api_message_type_id
 			TypeIdAccountNotifications = 102;
+
+		static const ::as::cryptox::t_api_message_type_id TypeIdAuthResponse =
+			103;
 
 	protected:
 		virtual void deserialize( boost::json::value & o ) = 0;
@@ -86,6 +95,49 @@ namespace as::cryptox::huobi {
 				o["sub"] = topicName;
 				o["id"] = AS_TOSTRING( ApiMessage::RequestId() );
 			}
+
+			return boost::json::serialize( o );
+		}
+
+		static as::t_string Auth( const as::t_string & hostname,
+			const as::t_string & path,
+			const as::t_string & apiKey,
+			const as::t_string & apiSecret )
+		{
+
+			auto ts = time( NULL );
+			struct tm tm;
+
+#if defined( _MSC_VER )
+			gmtime_s( &tm, &ts );
+#else
+			gmtime_r( &ts, &tm );
+#endif
+
+			std::stringstream ss;
+			ss << std::put_time( &tm, "%FT%T" );
+
+			auto tsS = ss.str();
+
+			as::t_string signData = AS_T( "GET\n" ) + hostname + AS_T( '\n' ) +
+				path + AS_T( '\n' ) + AS_T( "accessKey=" ) + apiKey +
+				AS_T( "&signatureMethod=HmacSHA256" ) +
+				AS_T( "&signatureVersion=2.1" ) + AS_T( "&timestamp=" ) +
+				as::Url::encode( tsS );
+
+			auto sign = hmacSha256( apiSecret, signData );
+			auto signature = toBase64( { sign.data(), sign.size() } );
+
+			boost::json::object o;
+
+			o["action"] = "req";
+			o["ch"] = "auth";
+			o["params"] = { { "authType", "api" },
+				{ "accessKey", apiKey },
+				{ "signatureMethod", "HmacSHA256" },
+				{ "signatureVersion", "2.1" },
+				{ "timestamp", tsS },
+				{ "signature", signature } };
 
 			return boost::json::serialize( o );
 		}
@@ -171,6 +223,26 @@ namespace as::cryptox::huobi {
 		WsMessageAccountNotifications()
 			: WsMessage( TypeIdAccountNotifications )
 		{
+		}
+	};
+
+	class WsMessageAuthResponse : public WsMessage {
+	protected:
+		bool m_isOk;
+
+	protected:
+		void deserialize( boost::json::value & o ) override;
+
+	public:
+		WsMessageAuthResponse()
+			: WsMessage( TypeIdAuthResponse )
+			, m_isOk( false )
+		{
+		}
+
+		bool IsOk() const
+		{
+			return m_isOk;
 		}
 	};
 

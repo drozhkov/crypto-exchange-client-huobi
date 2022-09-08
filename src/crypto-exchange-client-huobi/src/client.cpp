@@ -62,11 +62,26 @@ namespace as::cryptox::huobi {
 	void Client::wsErrorHandler(
 		WsClient & client, int code, const as::t_string & message )
 	{
+
+		AS_LOG_ERROR_LINE(
+			client.Index() << AS_T( ":" ) << code << AS_T( ":" ) << message );
 	}
 
 	void Client::wsHandshakeHandler( WsClient & client )
 	{
-		AS_CALL( m_clientReadyHandler, *this, client.Index() );
+		if ( client.Index() == WsClientApiV2Index ) {
+			auto authMessage =
+				WsMessage::Auth( m_wsApiUrls[client.Index()].Hostname(),
+					m_wsApiUrls[client.Index()].Path(),
+					m_apiKey,
+					m_apiSecret );
+
+			client.writeAsync( authMessage.c_str(), authMessage.length() );
+		}
+		else {
+			AS_CALL( m_clientReadyHandler, *this, client.Index() );
+		}
+
 		client.readAsync();
 	}
 
@@ -100,12 +115,24 @@ namespace as::cryptox::huobi {
 				data, size, client.Index() == WsClientApiV2Index );
 
 			switch ( message->TypeId() ) {
+				case WsMessage::TypeIdAuthResponse: {
+					auto m =
+						static_cast<WsMessageAuthResponse *>( message.get() );
+
+					if ( m->IsOk() ) {
+						AS_CALL( m_clientReadyHandler, *this, client.Index() );
+					}
+					else {
+						AS_CALL( m_clientErrorHandler, *this, client.Index() );
+					}
+				}
+
+				break;
+
 				case WsMessage::TypeIdPing: {
 					auto m = static_cast<WsMessagePing *>( message.get() );
 					auto s = WsMessage::Pong(
 						m->Ts(), client.Index() == WsClientApiV2Index );
-
-					std::cout << s << std::endl;
 
 					client.writeAsync( s.c_str(), s.length() );
 				}
@@ -241,9 +268,15 @@ namespace as::cryptox::huobi {
 		return subscribe( wsClientIndex, topicName );
 	}
 
-	void Client::subscribeOrderUpdate( const t_orderUpdateHandler & handler )
+	void Client::subscribeOrderUpdate(
+		size_t wsClientIndex, const t_orderUpdateHandler & handler )
 	{
-		as::cryptox::Client::subscribeOrderUpdate( handler );
+
+		as::cryptox::Client::subscribeOrderUpdate( wsClientIndex, handler );
+
+		if ( WsClientApiV2Index != wsClientIndex ) {
+			return;
+		}
 	}
 
 	t_order Client::placeOrder( Direction direction,

@@ -100,7 +100,7 @@ namespace as::cryptox::huobi {
 			as::cryptox::Symbol symbol,
 			const t_priceBookTickerHandler & handler ) override;
 
-		void subscribeOrderUpdate(
+		void subscribeOrderUpdate( size_t wsClientIndex,
 			const t_orderUpdateHandler & handler ) override;
 
 		t_order placeOrder( Direction direction,

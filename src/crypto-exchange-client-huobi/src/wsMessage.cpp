@@ -45,6 +45,13 @@ namespace as::cryptox::huobi {
 				r = new WsMessagePingV2;
 				v1 = o["data"];
 			}
+			else if ( "req" == action ) {
+				auto & ch = o["ch"].get_string();
+
+				if ( "auth" == ch ) {
+					r = new WsMessageAuthResponse;
+				}
+			}
 		}
 		else {
 			auto & o = v.get_object();
@@ -100,6 +107,14 @@ namespace as::cryptox::huobi {
 
 	void WsMessageAccountNotifications::deserialize( boost::json::value & o )
 	{
+	}
+
+	////
+
+	void WsMessageAuthResponse::deserialize( boost::json::value & v )
+	{
+		auto & o = v.get_object();
+		m_isOk = o["code"].get_int64() == 200;
 	}
 
 } // namespace as::cryptox::huobi
